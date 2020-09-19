@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="phaser.js"></script>
+</head>
+<body>
+
+<script>
+
+var config = {
+    type: Phaser.AUTO,
+    width: 600,
+    height: 800,
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 300 },
+            debug: false
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+
+// Initialize the Map
+var mapStartPos = {
+  pos_x: 300,
+  pos_y: 100
+};
+var mapSize = 7;
+var mapData = new Array(mapSize); //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
+for(var i = 0; i < mapSize; i++){
+   mapData[i] = new Array(mapSize);
+   for(var j = 0; j < mapSize; j++){
+      if(i+j<mapSize)
+          mapData[i][j] = 1;
+      else
+          mapData[i][j] = 0;
+   }
+}
+var cubes;
+var cubeLength = {
+  x: 43,
+  y: 75
+}
+console.log(mapData);
+
+// Initialize the Player
+var player;
+var playerPos = {
+  x: 0,
+  y: 0,
+  ini_pos_x: 300,
+  ini_pos_y: 65
+};
+var moveCurve;
+var graphics;
+var isMovingPreviousFrame = false;
+
+var leftKey;
+var rightKey;
+var upKey;
+var downKey;
+var restartKey;
+
+var gameOver = false;
+var game = new Phaser.Game(config);
+
+function preload ()
+{
+    // Load resources
+    this.load.image('cube_1', 'assets/images/cube_1.png');
+    this.load.image('cube_1_colorchange', 'assets/images/cube_1_colorchange.png');
+    this.load.image('qbert_down','assets/images/Qbert_32px_1.png');
+    this.load.image('qbert_left','assets/images/Qbert_32px_2.png');
+    this.load.image('qbert_right','assets/images/Qbert_32px_3.png');
+    this.load.image('qbert_up','assets/images/Qbert_32px_4.png');
+}
+
+function create ()
+{
+    // Draw cubes
+    cubes = new Array(mapSize);
+    for(var i = 0; i < mapSize; i++)
+       cubes[i] = new Array(mapSize);
+    for(var i = 0; i < mapSize; i++){
+       for(var j = 0; j < mapSize; j++){
+          if(mapData[i][j] == 1)
+            cubes[i][j] = this.add.image(mapStartPos.pos_x + cubeLength.x * (j - i), mapStartPos.pos_y + cubeLength.y * (i + j), 'cube_1');
+       }
+    }
+
+    // Draw player
+    player = this.add.follower(moveCurve, playerPos.ini_pos_x, playerPos.ini_pos_y, 'qbert_left');
+    graphics = this.add.graphics();
+    graphics.lineStyle(1, 0xffffff, 1);
+
+    // Add keyboard keys
+    leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+}
+
+function update ()
+{
+    if(gameOver){
+
+    }
+    PlayerMove();
+}
+
+function PlayerMove(){
+    if(isMovingPreviousFrame && !player.isFollowing())
+        PlayerArrival();
+    isMovingPreviousFrame = player.isFollowing();
+    // If moving, input is invalid.
+    if(player.isFollowing()){
+        return;
+    }
+
+    // Movement
+    if (Phaser.Input.Keyboard.JustDown(leftKey))
+    {
+        UpdateMovingCurve(-cubeLength.x,cubeLength.y);
+        playerPos.x += 1;
+        player.setTexture('qbert_left');
+    }
+    else if (Phaser.Input.Keyboard.JustDown(rightKey))
+    {
+        UpdateMovingCurve(cubeLength.x,-cubeLength.y);
+        playerPos.x -= 1;
+        player.setTexture('qbert_right');
+    }
+    else if (Phaser.Input.Keyboard.JustDown(upKey))
+    {
+        UpdateMovingCurve(-cubeLength.x,-cubeLength.y);
+        playerPos.y -= 1;
+        player.setTexture('qbert_up');
+    }
+    else if (Phaser.Input.Keyboard.JustDown(downKey))
+    {
+        UpdateMovingCurve(cubeLength.x,cubeLength.y);
+        playerPos.y += 1;
+        player.setTexture('qbert_down');
+    }
+}
+
+function UpdateMovingCurve(_x,_y){
+    //Initialize moving curve
+    var points = [];
+    points.push(new Phaser.Math.Vector2(player.x, player.y));
+    if(_y>0)
+        points.push(new Phaser.Math.Vector2(player.x+_x*0.5, player.y+_y*0.3));
+    else
+        points.push(new Phaser.Math.Vector2(player.x+_x*0.5, player.y+_y*0.7));
+    points.push(new Phaser.Math.Vector2(player.x+_x, player.y+_y));
+    moveCurve = new Phaser.Curves.Spline(points);
+    //moveCurve.draw(graphics, 128);
+
+    //Set follower's path and speed
+    player.setPath(moveCurve);
+    player.startFollow(400);
+}
+
+function PlayerArrival(){
+    //Change cube color
+    if(mapData[playerPos.x][playerPos.y] == 1){
+        mapData[playerPos.x][playerPos.y] = 2;
+        cubes[playerPos.x][playerPos.y].setTexture('cube_1_colorchange');
+    }
+}
+
+</script>
+
+</body>
+</html>
