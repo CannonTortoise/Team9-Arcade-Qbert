@@ -221,32 +221,28 @@ function RedBallMovement(){
     if(frames > 50)
     {
         var ballDirection = Math.floor((Math.random() * 2));
-        if(ballDirection == 0){
-            if(redBallPos.x > 300)
-            {
-              redBallPos.x = redBallPos.ini_pos_x;
-            }
-            else {
-              xlevel++;
-              UpdateRBMovingCurve(-cubeLength.x,cubeLength.y);
-              redBallPos.x += 1;
-            }
-            redBall.setTexture('red_ball');
-            frames = 0;
+        if(redBallPos.x > 5 || redBallPos.y > 5){
+          redBall.x = redBallPos.ini_pos_x;
+          redBall.y = redBallPos.ini_pos_y;
+          redBallPos.x = 0;
+          redBallPos.y = 0;
+          UpdateRBMovingCurve(100, 100);
         }
         else{
-          if(redBallPos.y > 300)
-          {
-            redBallPos.x = redBallPos.ini_pos_x;
+          if(ballDirection == 0){
+              UpdateRBMovingCurve(-cubeLength.x,cubeLength.y);
+              redBallPos.x += 1;
+              redBall.setTexture('red_ball');
+              frames = 0;
           }
-          else {
-            xlevel++;
+          else{
             UpdateRBMovingCurve(cubeLength.x,cubeLength.y);
             redBallPos.y += 1;
+            redBall.setTexture('red_ball');
+            frames = 0;
           }
-          redBall.setTexture('red_ball');
-          frames = 0;
         }
+
     }
     frames++;
 }
