@@ -60,14 +60,40 @@ var moveCurve;
 var graphics;
 var isMovingPreviousFrame = false;
 
+// Initialize the red ball
+var redBall;
+var redBallPos = {
+  x: 0,
+  y: 0,
+  ini_pos_x: 300,
+  ini_pos_y: 65
+};
+var RBmoveCurve;
+var RBgraphics;
+var RBisMovingPreviousFrame = false;
+
+// Initialize the bomb
+var bomb;
+// Initialize the bomb
+var explosion
+
+var locx;
+var locy;
+var cubex;
+var cubey;
+
 var leftKey;
 var rightKey;
 var upKey;
 var downKey;
 var restartKey;
+var bombKey;
 
 var gameOver = false;
 var game = new Phaser.Game(config);
+
+var frames;
+var xlevel;
 
 function preload ()
 {
@@ -78,6 +104,9 @@ function preload ()
     this.load.image('qbert_left','assets/images/Qbert_32px_2.png');
     this.load.image('qbert_right','assets/images/Qbert_32px_3.png');
     this.load.image('qbert_up','assets/images/Qbert_32px_4.png');
+    this.load.image('red_ball','assets/images/red_ball.png');
+    this.load.image('bomb','assets/images/bomb.png');
+    this.load.image('bomb_explosion','assets/images/bomb_explosion.png');
 }
 
 function create ()
@@ -98,12 +127,52 @@ function create ()
     graphics = this.add.graphics();
     graphics.lineStyle(1, 0xffffff, 1);
 
+    // Draw red ball
+    redBall = this.add.follower(RBmoveCurve, redBallPos.ini_pos_x, redBallPos.ini_pos_y, 'red_ball');
+    RBgraphics = this.add.graphics();
+    graphics.lineStyle(1, 0xffffff, 1);
+
     // Add keyboard keys
     leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
     rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
     upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
     restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    bombKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+    frames = 0;
+    xlevel = 0;
+
+    //set up bomb class
+    var Bomb = new Phaser.Class({
+        Extends: Phaser.GameObjects.Image,
+        initialize:
+        function Bomb (scene, x, y)
+        {
+            Phaser.GameObjects.Image.call(this, scene)
+            this.setTexture('bomb');
+            this.setPosition(-80, 0);
+            this.setOrigin(0);
+            scene.children.add(this);
+        }
+    });
+
+    //set up explosion class
+    var Explosion = new Phaser.Class({
+        Extends: Phaser.GameObjects.Image,
+        initialize:
+        function Explosion (scene, x, y)
+        {
+            Phaser.GameObjects.Image.call(this, scene)
+            this.setTexture('bomb_explosion');
+            this.setPosition(-80, 0);
+            this.setOrigin(0);
+            scene.children.add(this);
+        }
+    });
+
+    bomb = new Bomb(this, 3, 4);
+    explosion = new Explosion(this, 3, 4);
+
 }
 
 function update ()
@@ -111,7 +180,75 @@ function update ()
     if(gameOver){
 
     }
+    if (Phaser.Input.Keyboard.JustDown(bombKey))
+    {
+        locx = player.x - 30;
+        locy = player.y - 30;
+        cubex = playerPos.x;
+        cubey = playerPos.y
+        bomb.setPosition(locx, locy);
+        setTimeout(removeBomb, 1000)
+    }
+    RedBallMovement();
     PlayerMove();
+}
+
+function removeBomb(){
+    bomb.setPosition(-80, 0);
+    explosion.setPosition(locx, locy);
+    setTimeout(removeExplosion, 1000)
+}
+
+function removeExplosion(){
+    explosion.setPosition(-80, 0);
+    if(cubex == 0){
+        changeCubeColor(cubex, cubey);
+        changeCubeColor(cubex, cubey + 1);
+        changeCubeColor(cubex + 1, cubey);
+        changeCubeColor(cubex, cubey - 1);
+        changeCubeColor(cubex + 1, cubey - 1);
+    }
+    changeCubeColor(cubex, cubey);
+    changeCubeColor(cubex - 1, cubey);
+    changeCubeColor(cubex, cubey + 1);
+    changeCubeColor(cubex + 1, cubey);
+    changeCubeColor(cubex, cubey - 1);
+    changeCubeColor(cubex - 1, cubey + 1);
+    changeCubeColor(cubex + 1, cubey - 1);
+}
+
+function RedBallMovement(){
+    if(frames > 50)
+    {
+        var ballDirection = Math.floor((Math.random() * 2));
+        if(ballDirection == 0){
+            if(redBallPos.x > 300)
+            {
+              redBallPos.x = redBallPos.ini_pos_x;
+            }
+            else {
+              xlevel++;
+              UpdateRBMovingCurve(-cubeLength.x,cubeLength.y);
+              redBallPos.x += 1;
+            }
+            redBall.setTexture('red_ball');
+            frames = 0;
+        }
+        else{
+          if(redBallPos.y > 300)
+          {
+            redBallPos.x = redBallPos.ini_pos_x;
+          }
+          else {
+            xlevel++;
+            UpdateRBMovingCurve(cubeLength.x,cubeLength.y);
+            redBallPos.y += 1;
+          }
+          redBall.setTexture('red_ball');
+          frames = 0;
+        }
+    }
+    frames++;
 }
 
 function PlayerMove(){
@@ -167,11 +304,36 @@ function UpdateMovingCurve(_x,_y){
     player.startFollow(400);
 }
 
+function UpdateRBMovingCurve(_x,_y){
+    //Initialize moving curve
+    var rbpoints = [];
+    rbpoints.push(new Phaser.Math.Vector2(redBall.x, redBall.y));
+    if(_y>0)
+        rbpoints.push(new Phaser.Math.Vector2(redBall.x+_x*0.5, redBall.y+_y*0.3));
+    else
+        rbpoints.push(new Phaser.Math.Vector2(redBall.x+_x*0.5, redBall.y+_y*0.7));
+    rbpoints.push(new Phaser.Math.Vector2(redBall.x+_x, redBall.y+_y));
+    RBmoveCurve = new Phaser.Curves.Spline(rbpoints);
+    //moveCurve.draw(graphics, 128);
+
+    //Set follower's path and speed
+    redBall.setPath(RBmoveCurve);
+    redBall.startFollow(400);
+}
+
 function PlayerArrival(){
     //Change cube color
     if(mapData[playerPos.x][playerPos.y] == 1){
         mapData[playerPos.x][playerPos.y] = 2;
         cubes[playerPos.x][playerPos.y].setTexture('cube_1_colorchange');
+    }
+}
+
+function changeCubeColor(x,y){
+    //Change cube color
+    if(mapData[x][y] == 1){
+        mapData[x][y] = 2;
+        cubes[x][y].setTexture('cube_1_colorchange');
     }
 }
 
