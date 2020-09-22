@@ -19,62 +19,37 @@ var config = {
         }
     },
     scene: {
+        init: init,
         preload: preload,
         create: create,
         update: update
     }
 };
 
-// Initialize the Map
-var mapStartPos = {
-  pos_x: 300,
-  pos_y: 100
-};
-var mapSize = 7;
-var mapData = new Array(mapSize); //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
-for(var i = 0; i < mapSize; i++){
-   mapData[i] = new Array(mapSize);
-   for(var j = 0; j < mapSize; j++){
-      if(i+j<mapSize)
-          mapData[i][j] = 1;
-      else
-          mapData[i][j] = 0;
-   }
-}
+// Map
+var mapStartPos;
+var mapSize;
+var mapData; //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
 var cubes;
-var cubeLength = {
-  x: 43,
-  y: 75
-}
-console.log(mapData);
+var cubeLength;
 
-// Initialize the Player
+// Player
 var player;
-var playerPos = {
-  x: 0,
-  y: 0,
-  ini_pos_x: 300,
-  ini_pos_y: 65
-};
+var playerPos;
 var moveCurve;
 var graphics;
-var isMovingPreviousFrame = false;
+var isMovingPreviousFrame;
+var canPlayerChangeColor = false;
 
-// Initialize the red ball
+// Red ball
 var redBall;
-var redBallPos = {
-  x: 0,
-  y: 0,
-  ini_pos_x: 300,
-  ini_pos_y: 65
-};
+var redBallPos;
 var RBmoveCurve;
-var RBgraphics;
-var RBisMovingPreviousFrame = false;
+var RBisMovingPreviousFrame;
+var RBisActive;
 
-// Initialize the bomb
+// Bomb
 var bomb;
-// Initialize the bomb
 var explosion
 
 var locx;
@@ -82,28 +57,82 @@ var locy;
 var cubex;
 var cubey;
 
+// Keys
 var leftKey;
 var rightKey;
 var upKey;
 var downKey;
 var restartKey;
 var bombKey;
+var changeColorKey;
 
-var gameOver = false;
+// UI
+var winText;
+var loseText;
+
+// Game
+var gameState; //0 start 1 win 2 lose
 var game = new Phaser.Game(config);
 
 var frames;
 var xlevel;
+
+function init()
+{
+    // Init map
+    mapStartPos = {pos_x: 300, pos_y: 100};
+
+    mapSize = 7;
+
+    mapData  = new Array(mapSize); //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
+    for(var i = 0; i < mapSize; i++){
+        mapData[i] = new Array(mapSize);
+        for(var j = 0; j < mapSize; j++){
+           if(i+j<mapSize)
+               mapData[i][j] = 1;
+           else
+               mapData[i][j] = 0;
+        }
+    }
+
+    cubeLength = {x: 43, y: 75}
+
+    // Init player
+    playerPos = {
+      x: 0,
+      y: 0,
+      ini_pos_x: 300,
+      ini_pos_y: 55,
+      scale: 0.7
+    };
+
+    isMovingPreviousFrame = false;
+
+    // Init redBall
+    redBallPos = {
+      x: 0,
+      y: 0,
+      ini_pos_x: 300,
+      ini_pos_y: 60,
+      scale: 0.7
+    };
+
+    RBisMovingPreviousFrame = false;
+    RBisActive = false;
+
+    // Init gameState
+    gameState = 0;
+}
 
 function preload ()
 {
     // Load resources
     this.load.image('cube_1', 'assets/images/cube_1.png');
     this.load.image('cube_1_colorchange', 'assets/images/cube_1_colorchange.png');
-    this.load.image('qbert_down','assets/images/Qbert_32px_1.png');
-    this.load.image('qbert_left','assets/images/Qbert_32px_2.png');
-    this.load.image('qbert_right','assets/images/Qbert_32px_3.png');
-    this.load.image('qbert_up','assets/images/Qbert_32px_4.png');
+    this.load.image('qbert_down','assets/images/Qbert_64px_1.png');
+    this.load.image('qbert_left','assets/images/Qbert_64px_2.png');
+    this.load.image('qbert_right','assets/images/Qbert_64px_3.png');
+    this.load.image('qbert_up','assets/images/Qbert_64px_4.png');
     this.load.image('red_ball','assets/images/red_ball.png');
     this.load.image('bomb','assets/images/bomb.png');
     this.load.image('bomb_explosion','assets/images/bomb_explosion.png');
@@ -124,13 +153,15 @@ function create ()
 
     // Draw player
     player = this.add.follower(moveCurve, playerPos.ini_pos_x, playerPos.ini_pos_y, 'qbert_left');
+    player.scale = playerPos.scale;
     graphics = this.add.graphics();
     graphics.lineStyle(1, 0xffffff, 1);
 
     // Draw red ball
     redBall = this.add.follower(RBmoveCurve, redBallPos.ini_pos_x, redBallPos.ini_pos_y, 'red_ball');
-    RBgraphics = this.add.graphics();
-    graphics.lineStyle(1, 0xffffff, 1);
+    redBall.alpha = 0;
+    redBall.scale = redBallPos.scale;
+    setTimeout(ActivateRedBall, 5000)
 
     // Add keyboard keys
     leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
@@ -139,6 +170,7 @@ function create ()
     downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
     restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     bombKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+    changeColorKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
     frames = 0;
     xlevel = 0;
 
@@ -173,14 +205,38 @@ function create ()
     bomb = new Bomb(this, 3, 4);
     explosion = new Explosion(this, 3, 4);
 
+    // Init win&lose UI
+    winText = this.add.text(300, 300, 'You Win!');
+    winText.setOrigin(0.5, 0.5);
+    winText.setStyle({
+        fontSize: '42px',
+        color: '#000000',
+        align: 'center',
+    });
+    winText.alpha = 0;
+
+    loseText = this.add.text(300, 300, 'Game over!');
+    loseText.setOrigin(0.5, 0.5);
+    loseText.setStyle({
+        fontSize: '42px',
+        color: '#000000',
+        align: 'center',
+    });
+    loseText.alpha = 0;
+
 }
 
 function update ()
 {
-    if(gameOver){
+    if(Phaser.Input.Keyboard.JustDown(restartKey))
+        this.scene.restart();
+    if(gameState != 0)
+        return;
 
-    }
-    if (Phaser.Input.Keyboard.JustDown(bombKey))
+    if(Phaser.Input.Keyboard.JustDown(changeColorKey))
+        canPlayerChangeColor = !canPlayerChangeColor;
+
+    if (Phaser.Input.Keyboard.JustDown(bombKey) && !player.isFollowing())
     {
         locx = player.x - 30;
         locy = player.y - 30;
@@ -189,8 +245,13 @@ function update ()
         bomb.setPosition(locx, locy);
         setTimeout(removeBomb, 1000)
     }
-    RedBallMovement();
     PlayerMove();
+    if(RBisActive){
+        RedBallMovement();
+        LoseCondition();
+    }
+
+
 }
 
 function removeBomb(){
@@ -215,6 +276,11 @@ function removeExplosion(){
     changeCubeColor(cubex, cubey - 1);
     changeCubeColor(cubex - 1, cubey + 1);
     changeCubeColor(cubex + 1, cubey - 1);
+}
+
+function ActivateRedBall(){
+    RBisActive = true;
+    redBall.alpha = 1;
 }
 
 function RedBallMovement(){
@@ -310,7 +376,6 @@ function UpdateRBMovingCurve(_x,_y){
         rbpoints.push(new Phaser.Math.Vector2(redBall.x+_x*0.5, redBall.y+_y*0.7));
     rbpoints.push(new Phaser.Math.Vector2(redBall.x+_x, redBall.y+_y));
     RBmoveCurve = new Phaser.Curves.Spline(rbpoints);
-    //moveCurve.draw(graphics, 128);
 
     //Set follower's path and speed
     redBall.setPath(RBmoveCurve);
@@ -318,19 +383,69 @@ function UpdateRBMovingCurve(_x,_y){
 }
 
 function PlayerArrival(){
+    //Judge Lose
+    if(LoseCondition())
+        return;
     //Change cube color
-    if(mapData[playerPos.x][playerPos.y] == 1){
-        mapData[playerPos.x][playerPos.y] = 2;
-        cubes[playerPos.x][playerPos.y].setTexture('cube_1_colorchange');
-    }
+    if(canPlayerChangeColor)
+        changeCubeColor(playerPos.x, playerPos.y);
+
 }
 
 function changeCubeColor(x,y){
+    //Out of bounds
+    if(x<0 || y<0 || x+y>= mapSize)
+        return;
     //Change cube color
     if(mapData[x][y] == 1){
         mapData[x][y] = 2;
         cubes[x][y].setTexture('cube_1_colorchange');
     }
+    //Judge Win
+    WinCondition();
+}
+
+function WinCondition(){
+    var isWinner = true;
+    for(var i = 0; i < mapSize; i++){
+        for(var j = 0; j < mapSize; j++){
+            if(mapData[i][j] == 1){
+                isWinner = false;
+                break;
+            }
+        }
+        if(isWinner == false)
+            break;
+    }
+
+    if(isWinner){
+        gameState = 1;
+        winText.alpha = 1;
+    }
+
+    return isWinner;
+}
+
+function LoseCondition(){
+    var isLoser = false;
+    //Player out of bounds
+    if(playerPos.x<0 || playerPos.y<0 || playerPos.x+playerPos.y >= mapSize)
+        isLoser = true;
+    //distance between player and redball
+    if(RBisActive){
+        var playerCenter = player.getCenter();
+        var distance = playerCenter.distance(redBall.getCenter())
+        if(distance < 20)
+            isLoser = true;
+    }
+
+    if(isLoser){
+        gameState = 2;
+        loseText.alpha = 1;
+        player.stopFollow();
+        redBall.stopFollow();
+    }
+    return isLoser;
 }
 
 </script>
