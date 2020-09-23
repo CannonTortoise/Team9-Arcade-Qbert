@@ -248,6 +248,7 @@ function update ()
     PlayerMove();
     if(RBisActive){
         RedBallMovement();
+        RBMove();
         LoseCondition();
     }
 
@@ -311,6 +312,11 @@ function RedBallMovement(){
 
     }
     frames++;
+}
+function RBMove(){
+  if(RBisMovingPreviousFrame && !redBall.isFollowing())
+      RBArrival();
+  RBisMovingPreviousFrame = redBall.isFollowing();
 }
 
 function PlayerMove(){
@@ -382,6 +388,10 @@ function UpdateRBMovingCurve(_x,_y){
     redBall.startFollow(400);
 }
 
+function RBArrival(){
+  reverseCubeColor(redBallPos.x, redBallPos.y);
+}
+
 function PlayerArrival(){
     //Judge Lose
     if(LoseCondition())
@@ -390,6 +400,17 @@ function PlayerArrival(){
     if(canPlayerChangeColor)
         changeCubeColor(playerPos.x, playerPos.y);
 
+}
+
+function reverseCubeColor(x,y){
+    //Out of bounds
+    if(x<0 || y<0 || x+y>= mapSize)
+        return;
+    //Change cube color
+    if(mapData[x][y] == 2){
+        mapData[x][y] = 1;
+        cubes[x][y].setTexture('cube_1');
+    }
 }
 
 function changeCubeColor(x,y){
