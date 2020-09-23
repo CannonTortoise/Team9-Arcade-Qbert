@@ -49,8 +49,10 @@ var RBisMovingPreviousFrame;
 var RBisActive;
 
 // Bomb
-var bomb;
-var explosion
+var bombs;
+var bombsMaxNum;
+var bomb_offset_y;
+var explosions;
 
 var locx;
 var locy;
@@ -107,6 +109,10 @@ function init()
     };
 
     isMovingPreviousFrame = false;
+
+    // Init bomb
+    bomb_offset_y = 5;
+    bombsMaxNum = 4;
 
     // Init redBall
     redBallPos = {
@@ -178,32 +184,75 @@ function create ()
     var Bomb = new Phaser.Class({
         Extends: Phaser.GameObjects.Image,
         initialize:
-        function Bomb (scene, x, y)
+        function Bomb (scene)
         {
-            Phaser.GameObjects.Image.call(this, scene)
-            this.setTexture('bomb');
-            this.setPosition(-80, 0);
-            this.setOrigin(0);
-            scene.children.add(this);
+            Phaser.GameObjects.Image.call(this, scene, 0, 0, 'bomb');
+        },
+
+        create: function (x, y, cx, cy)
+        {
+            this.cubex = cx;
+            this.cubey = cy;
+            this.setPosition(x, y);
+
+            this.setActive(true);
+            this.setVisible(true);
+        },
+
+        removeTimeout: function(time)
+        {
+            setTimeout(this.remove.bind(this), time);
+        },
+
+        remove: function()
+        {
+
+            var explosion = explosions.get();
+            if(explosion)
+                explosion.create(this.x, this.y, this.cubex, this.cubey, 500);
+
+            this.setActive(false);
+            this.setVisible(false);
         }
+    });
+
+    bombs = this.add.group({
+        classType: Bomb,
+        maxSize: bombsMaxNum
     });
 
     //set up explosion class
     var Explosion = new Phaser.Class({
         Extends: Phaser.GameObjects.Image,
         initialize:
-        function Explosion (scene, x, y)
+        function Explosion (scene)
         {
-            Phaser.GameObjects.Image.call(this, scene)
-            this.setTexture('bomb_explosion');
-            this.setPosition(-80, 0);
-            this.setOrigin(0);
-            scene.children.add(this);
+            Phaser.GameObjects.Image.call(this, scene, 0, 0, 'bomb_explosion');
+        },
+
+        create: function (x, y, cx, cy, time)
+        {
+            this.cubex = cx;
+            this.cubey = cy;
+            this.setPosition(x, y);
+
+            this.setActive(true);
+            this.setVisible(true);
+            setTimeout(this.remove.bind(this), time);
+        },
+
+        remove: function()
+        {
+            changeCubeColor(this.cubex, this.cubey);
+            this.setActive(false);
+            this.setVisible(false);
         }
     });
 
-    bomb = new Bomb(this, 3, 4);
-    explosion = new Explosion(this, 3, 4);
+    explosions = this.add.group({
+        classType: Explosion,
+        maxSize: bombsMaxNum
+    });
 
     // Init win&lose UI
     winText = this.add.text(300, 300, 'You Win!');
@@ -238,12 +287,18 @@ function update ()
 
     if (Phaser.Input.Keyboard.JustDown(bombKey) && !player.isFollowing())
     {
+        if(bombs.countActive() == 0)
+            CreateOneBomb();
+        else
+            removeAllBombs(500);
+
+        /*
         locx = player.x - 30;
         locy = player.y - 30;
         cubex = playerPos.x;
-        cubey = playerPos.y
+        cubey = playerPos.y;
         bomb.setPosition(locx, locy);
-        setTimeout(removeBomb, 1000)
+        setTimeout(removeBomb, 1000);*/
     }
     PlayerMove();
     if(RBisActive){
@@ -251,17 +306,37 @@ function update ()
         LoseCondition();
     }
 
-
 }
 
+function CreateOneBomb(){
+    var bomb = bombs.get();
+    if(bomb){
+        bomb.create(player.x, player.y + bomb_offset_y, playerPos.x, playerPos.y);
+        if(bombs.countActive() == bombsMaxNum)
+            removeAllBombs(1000);
+    }
+}
+
+
+function removeAllBombs(time){
+    var children = bombs.getChildren();
+    for(var i=0; i<children.length; i++)
+        if(children[i].active)
+            children[i].removeTimeout(time);
+}
+
+/*
 function removeBomb(){
     bomb.setPosition(-80, 0);
     explosion.setPosition(locx, locy);
     setTimeout(removeExplosion, 1000)
 }
-
+*/
+/*
 function removeExplosion(){
     explosion.setPosition(-80, 0);
+    changeCubeColor(cubex, cubey);
+
     if(cubex == 0){
         changeCubeColor(cubex, cubey);
         changeCubeColor(cubex, cubey + 1);
@@ -276,8 +351,9 @@ function removeExplosion(){
     changeCubeColor(cubex, cubey - 1);
     changeCubeColor(cubex - 1, cubey + 1);
     changeCubeColor(cubex + 1, cubey - 1);
-}
 
+}
+*/
 function ActivateRedBall(){
     RBisActive = true;
     redBall.alpha = 1;
@@ -389,7 +465,9 @@ function PlayerArrival(){
     //Change cube color
     if(canPlayerChangeColor)
         changeCubeColor(playerPos.x, playerPos.y);
-
+    //Create bombs
+    if(bombs.countActive() > 0 && bombs.countActive() < bombsMaxNum)
+        CreateOneBomb();
 }
 
 function changeCubeColor(x,y){
