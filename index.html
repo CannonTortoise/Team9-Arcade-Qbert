@@ -9,8 +9,8 @@
 
 var config = {
     type: Phaser.AUTO,
-    width: 600,
-    height: 800,
+    width: 700,
+    height: 700,
     physics: {
         default: 'arcade',
         arcade: {
@@ -29,21 +29,21 @@ var config = {
 // Map
 var mapStartPos;
 var mapSize;
-var mapData; //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
+var mapData; //2d array. 0 no cube; 1 color1; 2 color2
 var cubes;
 var cubeLength;
+var cubeSprites;
 
 // Player
 var player;
-var playerPos;
+var playerData;
 var moveCurve;
 var graphics;
 var isMovingPreviousFrame;
-var canPlayerChangeColor = false;
 
 // Red ball
 var redBall;
-var redBallPos;
+var redBallData;
 var RBmoveCurve;
 var RBisMovingPreviousFrame;
 var RBisActive;
@@ -53,6 +53,7 @@ var bombs;
 var bombsMaxNum;
 var bomb_offset_y;
 var explosions;
+var bombRemoveTime;
 
 var locx;
 var locy;
@@ -66,27 +67,40 @@ var upKey;
 var downKey;
 var restartKey;
 var bombKey;
-var changeColorKey;
 
 // UI
 var winText;
 var loseText;
+var scoreText;
+var bombsUI;
+
+// Level
+var currentLevel = 3; //1level1 2level2 3level3
+var levelConfig = new Array();
+levelConfig[0] = {cubeTypeNum: 2, isChangePermanent: true};
+levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
+levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
+var cubeTypeNum;
+var isChangePermanent;
 
 // Game
 var gameState; //0 start 1 win 2 lose
 var game = new Phaser.Game(config);
-
-var frames;
-var xlevel;
+var score;
 
 function init()
 {
+    // Init level
+    cubeTypeNum = levelConfig[currentLevel-1].cubeTypeNum;
+    isChangePermanent = levelConfig[currentLevel-1].isChangePermanent;
+    cubeSprites = new Array('cube1','cube2','cube3');
+
     // Init map
-    mapStartPos = {pos_x: 300, pos_y: 100};
+    mapStartPos = {pos_x: 350, pos_y: 130};
 
     mapSize = 7;
 
-    mapData  = new Array(mapSize); //2d array. 0 no cube; 1 color1; 2 cube_1_colorchange
+    mapData  = new Array(mapSize); //2d array. 0 no cube; 1 color1; 2 color2
     for(var i = 0; i < mapSize; i++){
         mapData[i] = new Array(mapSize);
         for(var j = 0; j < mapSize; j++){
@@ -100,30 +114,35 @@ function init()
     cubeLength = {x: 43, y: 75}
 
     // Init player
-    playerPos = {
+    playerData = {
       x: 0,
       y: 0,
-      ini_pos_x: 300,
-      ini_pos_y: 55,
-      scale: 1
+      ini_pos_x: 350,
+      ini_pos_y: 85,
+      scale: 1,
+      followSpeed: 600
     };
 
     isMovingPreviousFrame = false;
 
     // Init bomb
     bomb_offset_y = 0;
-    bombsMaxNum = 4;
+    bombsMaxNum = 5;
+    bombRemoveTime = 3000;
 
     // Init redBall
-    redBallPos = {
+    redBallData = {
       x: 0,
       y: 0,
-      ini_pos_x: 300,
-      ini_pos_y: 60,
-      scale: 0.7
+      ini_pos_x: 350,
+      ini_pos_y: 90,
+      scale: 0.7,
+      bornTime: 5000,
+      respawnTime: 5000,
+      followSpeed: 1000
     };
 
-    RBisMovingPreviousFrame = false;
+    RBisMovingPreviousFrame = true;
     RBisActive = false;
 
     // Init gameState
@@ -133,8 +152,9 @@ function init()
 function preload ()
 {
     // Load resources
-    this.load.image('cube_1', 'assets/images/cube_1.png');
-    this.load.image('cube_1_colorchange', 'assets/images/cube_1_colorchange.png');
+    this.load.image('cube1', 'assets/images/cube1.png');
+    this.load.image('cube2', 'assets/images/cube2.png');
+    this.load.image('cube3', 'assets/images/cube3.png');
     this.load.image('bubble','assets/images/bubble.png');
     this.load.image('bomb_explosion','assets/images/bubble_boom.png');
     this.load.spritesheet('duck_left', 'assets/images/duck1.png', { frameWidth: 64, frameHeight: 64 });
@@ -153,14 +173,14 @@ function create ()
     for(var i = 0; i < mapSize; i++){
        for(var j = 0; j < mapSize; j++){
           if(mapData[i][j] == 1)
-            cubes[i][j] = this.add.image(mapStartPos.pos_x + cubeLength.x * (j - i), mapStartPos.pos_y + cubeLength.y * (i + j), 'cube_1');
+            cubes[i][j] = this.add.image(mapStartPos.pos_x + cubeLength.x * (j - i), mapStartPos.pos_y + cubeLength.y * (i + j), cubeSprites[0]);
        }
     }
 
     // Draw player
-    player = this.add.follower(moveCurve, playerPos.ini_pos_x, playerPos.ini_pos_y, 'duck_left');
+    player = this.add.follower(moveCurve, playerData.ini_pos_x, playerData.ini_pos_y, 'duck_left');
 
-    player.scale = playerPos.scale;
+    player.scale = playerData.scale;
     graphics = this.add.graphics();
     graphics.lineStyle(1, 0xffffff, 1);
 
@@ -192,10 +212,10 @@ function create ()
 
 
     // Draw red ball
-    redBall = this.add.follower(RBmoveCurve, redBallPos.ini_pos_x, redBallPos.ini_pos_y, 'mud_ball');
+    redBall = this.add.follower(RBmoveCurve, redBallData.ini_pos_x, redBallData.ini_pos_y, 'mud_ball');
     redBall.alpha = 0;
-    redBall.scale = redBallPos.scale;
-    setTimeout(ActivateRedBall, 5000)
+    redBall.scale = redBallData.scale;
+    setTimeout(ActivateRedBall, redBallData.bornTime)
 
     this.anims.create({
         key: 'mud_jump',
@@ -211,9 +231,6 @@ function create ()
     downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
     restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     bombKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    changeColorKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
-    frames = 0;
-    xlevel = 0;
 
     //set up bomb class
     var Bomb = new Phaser.Class({
@@ -295,66 +312,80 @@ function create ()
     });
 
     // Init win&lose UI
-    winText = this.add.text(300, 300, 'You Win!');
+    winText = this.add.text(350, 300, 'You Win!');
     winText.setOrigin(0.5, 0.5);
     winText.setStyle({
         fontSize: '42px',
         color: '#000000',
-        align: 'center',
     });
     winText.alpha = 0;
 
-    loseText = this.add.text(300, 300, 'Game over!');
+    loseText = this.add.text(350, 300, 'Game over!');
     loseText.setOrigin(0.5, 0.5);
     loseText.setStyle({
         fontSize: '42px',
         color: '#000000',
-        align: 'center',
     });
     loseText.alpha = 0;
 
+    // Init score
+    score = 0;
+    scoreText = this.add.text(10, 10, 'Score: 0');
+
+    // Init bombs UI
+    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:40, stepX:24}, setScale:{x: 0.4}});
+
+    // Init target
+    this.add.text(690, 10, 'Change To').setOrigin(1,0);
+    this.add.image(672, 35, cubeSprites[cubeTypeNum-1]).setOrigin(1,0).setScale(0.5);
 }
 
 function update ()
 {
+    // restart
     if(Phaser.Input.Keyboard.JustDown(restartKey))
         this.scene.restart();
     if(gameState != 0)
         return;
 
-    if(Phaser.Input.Keyboard.JustDown(changeColorKey))
-        canPlayerChangeColor = !canPlayerChangeColor;
-
+    // create bomb
     if (Phaser.Input.Keyboard.JustDown(bombKey) && !player.isFollowing())
     {
-        if(bombs.countActive() == 0)
-            CreateOneBomb();
-        else
-            removeAllBombs(500);
-
-        /*
-        locx = player.x - 30;
-        locy = player.y - 30;
-        cubex = playerPos.x;
-        cubey = playerPos.y;
-        bomb.setPosition(locx, locy);
-        setTimeout(removeBomb, 1000);*/
+        if(bombs.countActive() < bombsMaxNum)
+            CreateBomb();
     }
+    // player move
     PlayerMove();
+    // red ball move
     if(RBisActive){
-        RedBallMovement();
         RBMove();
         LoseCondition();
     }
 
+    // Update UI
+    UpdateScore();
+    UpdateBombsUI();
 }
 
-function CreateOneBomb(){
+function UpdateScore(){
+    scoreText.setText('Score: '+ score);
+}
+
+function UpdateBombsUI(){
+    var remainNum = bombsMaxNum - bombs.countActive();
+    var bui = bombsUI.getChildren();
+    var i = 0;
+    for(; i<remainNum; i++)
+        bui[i].visible = true;
+    for(; i<bombsMaxNum; i++)
+        bui[i].visible = false;
+}
+
+function CreateBomb(){
     var bomb = bombs.get();
     if(bomb){
-        bomb.create(player.x, player.y + bomb_offset_y, playerPos.x, playerPos.y);
-        if(bombs.countActive() == bombsMaxNum)
-            removeAllBombs(1000);
+        bomb.create(player.x, player.y + bomb_offset_y, playerData.x, playerData.y);
+        bomb.removeTimeout(bombRemoveTime);
     }
 }
 
@@ -366,80 +397,44 @@ function removeAllBombs(time){
             children[i].removeTimeout(time);
 }
 
-/*
-function removeBomb(){
-    bomb.setPosition(-80, 0);
-    explosion.setPosition(locx, locy);
-    setTimeout(removeExplosion, 1000)
-}
-*/
-/*
-function removeExplosion(){
-    explosion.setPosition(-80, 0);
-    changeCubeColor(cubex, cubey);
-
-    if(cubex == 0){
-        changeCubeColor(cubex, cubey);
-        changeCubeColor(cubex, cubey + 1);
-        changeCubeColor(cubex + 1, cubey);
-        changeCubeColor(cubex, cubey - 1);
-        changeCubeColor(cubex + 1, cubey - 1);
-    }
-    changeCubeColor(cubex, cubey);
-    changeCubeColor(cubex - 1, cubey);
-    changeCubeColor(cubex, cubey + 1);
-    changeCubeColor(cubex + 1, cubey);
-    changeCubeColor(cubex, cubey - 1);
-    changeCubeColor(cubex - 1, cubey + 1);
-    changeCubeColor(cubex + 1, cubey - 1);
-
-}
-*/
 function ActivateRedBall(){
     RBisActive = true;
     redBall.alpha = 1;
+    redBallData.x = 0;
+    redBallData.y = 0;
+    redBall.x = redBallData.ini_pos_x;
+    redBall.y = redBallData.ini_pos_y;
+    UpdateRBMovingCurve(0, 0);
+    RBisMovingPreviousFrame = true;
 }
 
 function ResetBall(){
-    redBall.x = redBallPos.ini_pos_x;
-    redBall.y = redBallPos.ini_pos_y;
-    redBallPos.x = 0;
-    redBallPos.y = 0;
-    UpdateRBMovingCurve(0, 0);
     redBall.alpha = 0;
     RBisActive = false;
-    setTimeout(ActivateRedBall, 3000)
+    setTimeout(ActivateRedBall, redBallData.respawnTime);
 }
 
 function RedBallMovement(){
-    if(!RBisActive)
-        return;
-    if(frames > 50)
-    {
-        var ballDirection = Math.floor((Math.random() * 2));
-        if(redBallPos.x + redBallPos.y >= mapSize)
-            ResetBall();
-        else{
+      var ballDirection = Math.floor((Math.random() * 2));
+      if(redBallData.x + redBallData.y >= mapSize)
+          ResetBall();
+      else{
           if(ballDirection == 0){
               UpdateRBMovingCurve(-cubeLength.x,cubeLength.y);
-              redBallPos.x += 1;
-              frames = 0;
+              redBallData.x += 1;
           }
           else{
-            UpdateRBMovingCurve(cubeLength.x,cubeLength.y);
-            redBallPos.y += 1;
-            frames = 0;
+              UpdateRBMovingCurve(cubeLength.x,cubeLength.y);
+              redBallData.y += 1;
           }
-        }
-        redBall.anims.play('mud_jump', true);
-
-    }
-    frames++;
+      }
+      redBall.anims.play('mud_jump', true);
 }
+
 function RBMove(){
-  if(RBisMovingPreviousFrame && !redBall.isFollowing())
-      RBArrival();
-  RBisMovingPreviousFrame = redBall.isFollowing();
+    if(RBisMovingPreviousFrame && !redBall.isFollowing())
+        RBArrival();
+    RBisMovingPreviousFrame = redBall.isFollowing();
 }
 
 function PlayerMove(){
@@ -455,25 +450,25 @@ function PlayerMove(){
     if (Phaser.Input.Keyboard.JustDown(leftKey))
     {
         UpdateMovingCurve(-cubeLength.x,cubeLength.y);
-        playerPos.x += 1;
+        playerData.x += 1;
         player.anims.play('left', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(rightKey))
     {
         UpdateMovingCurve(cubeLength.x,-cubeLength.y);
-        playerPos.x -= 1;
+        playerData.x -= 1;
         player.anims.play('right', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(upKey))
     {
         UpdateMovingCurve(-cubeLength.x,-cubeLength.y);
-        playerPos.y -= 1;
+        playerData.y -= 1;
         player.anims.play('up', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(downKey))
     {
         UpdateMovingCurve(cubeLength.x,cubeLength.y);
-        playerPos.y += 1;
+        playerData.y += 1;
         player.anims.play('down', true);
     }
 }
@@ -504,7 +499,7 @@ function UpdateMovingCurve(_x,_y){
 
     //Set follower's path and speed
     player.setPath(moveCurve);
-    player.startFollow(600);
+    player.startFollow(playerData.followSpeed);
 }
 
 function UpdateRBMovingCurve(_x,_y){
@@ -524,23 +519,17 @@ function UpdateRBMovingCurve(_x,_y){
 
     //Set follower's path and speed
     redBall.setPath(RBmoveCurve);
-    redBall.startFollow(600);
+    redBall.startFollow(redBallData.followSpeed);
 }
 
 function RBArrival(){
-  reverseCubeColor(redBallPos.x, redBallPos.y);
+    reverseCubeColor(redBallData.x, redBallData.y);
+    setTimeout(RedBallMovement, 100);
 }
 
 function PlayerArrival(){
     //Judge Lose
-    if(LoseCondition())
-        return;
-    //Change cube color
-    if(canPlayerChangeColor)
-        changeCubeColor(playerPos.x, playerPos.y);
-    //Create bombs
-    if(bombs.countActive() > 0 && bombs.countActive() < bombsMaxNum)
-        CreateOneBomb();
+    LoseCondition();
 }
 
 function reverseCubeColor(x,y){
@@ -548,9 +537,9 @@ function reverseCubeColor(x,y){
     if(x<0 || y<0 || x+y>= mapSize)
         return;
     //Change cube color
-    if(mapData[x][y] == 2){
-        mapData[x][y] = 1;
-        cubes[x][y].setTexture('cube_1');
+    if(mapData[x][y] >= 2){
+        mapData[x][y] -= 1;
+        cubes[x][y].setTexture(cubeSprites[mapData[x][y]-1]);
     }
 }
 
@@ -558,10 +547,15 @@ function changeCubeColor(x,y){
     //Out of bounds
     if(x<0 || y<0 || x+y>= mapSize)
         return;
+
     //Change cube color
-    if(mapData[x][y] == 1){
-        mapData[x][y] = 2;
-        cubes[x][y].setTexture('cube_1_colorchange');
+    if(mapData[x][y] > 0 && mapData[x][y] < cubeTypeNum){
+        mapData[x][y] += 1;
+        cubes[x][y].setTexture(cubeSprites[mapData[x][y]-1]);
+    }
+    else if(mapData[x][y] == cubeTypeNum && !isChangePermanent){
+        mapData[x][y] = 1;
+        cubes[x][y].setTexture(cubeSprites[0]);
     }
     //Judge Win
     WinCondition();
@@ -571,7 +565,7 @@ function WinCondition(){
     var isWinner = true;
     for(var i = 0; i < mapSize; i++){
         for(var j = 0; j < mapSize; j++){
-            if(mapData[i][j] == 1){
+            if(mapData[i][j] > 0 && mapData[i][j] < cubeTypeNum){
                 isWinner = false;
                 break;
             }
@@ -591,7 +585,7 @@ function WinCondition(){
 function LoseCondition(){
     var isLoser = false;
     //Player out of bounds
-    if(playerPos.x<0 || playerPos.y<0 || playerPos.x+playerPos.y >= mapSize)
+    if(playerData.x<0 || playerData.y<0 || playerData.x+playerData.y >= mapSize)
         isLoser = true;
     //distance between player and redball
     if(RBisActive){
