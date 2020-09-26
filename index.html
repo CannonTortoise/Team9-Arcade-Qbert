@@ -155,7 +155,7 @@ function preload ()
     this.load.image('cube1', 'assets/images/cube1.png');
     this.load.image('cube2', 'assets/images/cube2.png');
     this.load.image('cube3', 'assets/images/cube3.png');
-    this.load.image('bubble','assets/images/bubble.png');
+    this.load.spritesheet('bubble','assets/images/bubble.png', { frameWidth: 50, frameHeight: 50 });
     this.load.image('bomb_explosion','assets/images/bubble_boom.png');
     this.load.spritesheet('duck_left', 'assets/images/duck1.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('duck_down', 'assets/images/duck2.png', { frameWidth: 64, frameHeight: 64 });
@@ -251,18 +251,21 @@ function create ()
             this.setVisible(true);
         },
 
-        removeTimeout: function(time)
+        burstTimeout: function(time)
         {
             setTimeout(this.remove.bind(this), time);
         },
 
-        remove: function()
+        burst: function()
         {
+            setTimeout(this.remove.bind(this), 100);
+        },
 
+        remove:function()
+        {
             var explosion = explosions.get();
             if(explosion)
                 explosion.create(this.x, this.y, this.cubex, this.cubey, 500);
-
             this.setActive(false);
             this.setVisible(false);
         }
@@ -271,6 +274,13 @@ function create ()
     bombs = this.add.group({
         classType: Bomb,
         maxSize: bombsMaxNum
+    });
+
+    this.anims.create({
+        key: 'bubble_burst',
+        frames: this.anims.generateFrameNumbers('bubble', { start: 0, end: 4 }),
+        frameRate: 10,
+        repeat: 0
     });
 
     //set up explosion class
@@ -385,7 +395,7 @@ function CreateBomb(){
     var bomb = bombs.get();
     if(bomb){
         bomb.create(player.x, player.y + bomb_offset_y, playerData.x, playerData.y);
-        bomb.removeTimeout(bombRemoveTime);
+        bomb.burstTimeout(bombRemoveTime);
     }
 }
 
@@ -394,7 +404,7 @@ function removeAllBombs(time){
     var children = bombs.getChildren();
     for(var i=0; i<children.length; i++)
         if(children[i].active)
-            children[i].removeTimeout(time);
+            children[i].burstTimeout(time);
 }
 
 function ActivateRedBall(){
