@@ -6,26 +6,6 @@
 <body>
 
 <script>
-
-var config = {
-    type: Phaser.AUTO,
-    width: 700,
-    height: 700,
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 300 },
-            debug: false
-        }
-    },
-    scene: {
-        init: init,
-        preload: preload,
-        create: create,
-        update: update
-    }
-};
-
 // Map
 var mapStartPos;
 var mapSize;
@@ -82,11 +62,86 @@ levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
 levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
 var cubeTypeNum;
 var isChangePermanent;
+var score;
 
-// Game
+// Game & Scene
+var gameScene = {
+    key: 'game',
+    init: init,
+    preload: preload,
+    create: create,
+    update: update
+};
+
+var menuScene = {
+    key: 'menu',
+    preload: menuPreload,
+    create: menuCreate,
+    update: menuUpdate
+};
+
+var config = {
+    type: Phaser.AUTO,
+    width: 700,
+    height: 700,
+    scene: [menuScene, gameScene]
+};
+
 var gameState; //0 start 1 win 2 lose
 var game = new Phaser.Game(config);
-var score;
+
+// Duck image animation in menu
+var duckImages = new Array();
+var duckMaxRotation = 0.5;
+var duckDirsDefault = new Array(1,-1,1,-1);
+var duckDirsCurrent = new Array(1,-1,1,-1);
+var duckRotateSpeed = 0.02;
+
+function menuPreload()
+{
+    this.load.image('background', 'assets/images/background.png');
+    this.load.image('backgroundBubble', 'assets/images/background-bubble.png');
+    this.load.image('instruction', 'assets/images/Instruction.png');
+    this.load.image('title', 'assets/images/Title.png');
+    this.load.spritesheet('startButton','assets/images/Start button.png', { frameWidth: 139, frameHeight: 57 });
+    this.load.spritesheet('duck_left', 'assets/images/duck1.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_down', 'assets/images/duck2.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_right', 'assets/images/duck3.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_up', 'assets/images/duck4.png', { frameWidth: 64, frameHeight: 64 });
+}
+
+function menuCreate()
+{
+    this.add.image(0, 0, 'background').setOrigin(0);
+    this.add.image(0, 0, 'backgroundBubble').setOrigin(0);
+    this.add.image(350, 220, 'title').setOrigin(0.5);
+    this.add.image(350, 435, 'instruction').setOrigin(0.5);
+
+    var duckDistance = 80;
+    var duckY = 345;
+    duckImages[0] = this.add.image(350 - 1.5 * duckDistance, duckY, 'duck_left').setOrigin(0.5);
+    duckImages[1] = this.add.image(350 - 0.5 * duckDistance, duckY, 'duck_down').setOrigin(0.5);
+    duckImages[2] = this.add.image(350 + 0.5 * duckDistance, duckY, 'duck_up').setOrigin(0.5);
+    duckImages[3] = this.add.image(350 + 1.5 * duckDistance, duckY, 'duck_right').setOrigin(0.5);
+
+    var startButton = this.add.sprite(350, 545, 'startButton').setOrigin(0.5);
+    startButton.setInteractive();
+    startButton.on('pointerdown', () => { this.scene.start('game'); });
+    startButton.on('pointerover', () => { startButton.setTexture('startButton', 1); });
+    startButton.on('pointerout', () => { startButton.setTexture('startButton', 0); });
+}
+
+function menuUpdate(){
+    for (var i=0; i<duckImages.length; i++){
+        duckImages[i].rotation += duckDirsCurrent[i] * duckRotateSpeed;
+        if(duckDirsDefault[i]==1)
+            if(duckImages[i].rotation <= 0 || duckImages[i].rotation >= duckMaxRotation)
+                duckDirsCurrent[i] = -duckDirsCurrent[i];
+        if(duckDirsDefault[i]==-1)
+            if(duckImages[i].rotation >= 0 || duckImages[i].rotation <= -duckMaxRotation)
+                duckDirsCurrent[i] = -duckDirsCurrent[i];
+    }
+}
 
 function init()
 {
