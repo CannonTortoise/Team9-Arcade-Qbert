@@ -45,8 +45,8 @@ var leftKey;
 var rightKey;
 var upKey;
 var downKey;
-var restartKey;
-var bombKey;
+var operateKey; //place a bomb, continue, restart ...
+var cheatKey;
 
 // UI
 var winText;
@@ -55,14 +55,17 @@ var scoreText;
 var bombsUI;
 
 // Level
-var currentLevel = 3; //1level1 2level2 3level3
+var currentLevel = 1; //1level1 2level2 3level3
 var levelConfig = new Array();
 levelConfig[0] = {cubeTypeNum: 2, isChangePermanent: true};
 levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
 levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
 var cubeTypeNum;
 var isChangePermanent;
-var score;
+
+// Score
+var score = 0;
+var scoreBase = 50;
 
 // Game & Scene
 var gameScene = {
@@ -284,8 +287,8 @@ function create ()
     rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
     upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-    bombKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    operateKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    cheatKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
 
     //set up bomb class
     var Bomb = new Phaser.Class({
@@ -357,6 +360,7 @@ function create ()
             this.setVisible(true);
             setTimeout(this.remove.bind(this), time);
 
+            // Destroy red ball if it is closed to explosion
             var explosionCenter = this.getCenter();
             var distance = explosionCenter.distance(redBall.getCenter())
             if(distance < 50)
@@ -377,28 +381,30 @@ function create ()
     });
 
     // Init win&lose UI
-    winText = this.add.text(350, 300, 'You Win!');
+    winText = this.add.text(350, 300, 'Level '+ currentLevel + ' Complete!\nPress Space to Continue.');
     winText.setOrigin(0.5, 0.5);
     winText.setStyle({
-        fontSize: '42px',
-        color: '#000000',
+        fontSize: '36px',
+        color: '#FF0000',
     });
     winText.alpha = 0;
 
-    loseText = this.add.text(350, 300, 'Game over!');
+    loseText = this.add.text(350, 300, 'Game Over!\nPress Space to Restart.');
     loseText.setOrigin(0.5, 0.5);
     loseText.setStyle({
-        fontSize: '42px',
-        color: '#000000',
+        fontSize: '36px',
+        color: '#FF0000',
     });
     loseText.alpha = 0;
 
     // Init score
-    score = 0;
-    scoreText = this.add.text(10, 10, 'Score: 0');
+    scoreText = this.add.text(10, 30, 'Score: '+ score);
+
+    // Level UI
+    this.add.text(10, 10, 'Level: ' + currentLevel);
 
     // Init bombs UI
-    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:40, stepX:24}, setScale:{x: 0.4}});
+    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:65, stepX:24}, setScale:{x: 0.4}});
 
     // Init target
     this.add.text(690, 10, 'Change To').setOrigin(1,0);
@@ -407,14 +413,30 @@ function create ()
 
 function update ()
 {
+
+    if(Phaser.Input.Keyboard.JustDown(cheatKey)){
+        gameState = 1;
+        winText.alpha = 1;
+        player.stopFollow();
+        redBall.stopFollow();
+    }
+
+    // next level
+    if(gameState == 1 && Phaser.Input.Keyboard.JustDown(operateKey))
+        NextLevel(this.scene);
+
     // restart
-    if(Phaser.Input.Keyboard.JustDown(restartKey))
+    if(gameState == 2 && Phaser.Input.Keyboard.JustDown(operateKey)){
+        currentLevel = 1;
+        score = 0;
         this.scene.restart();
+    }
+
     if(gameState != 0)
         return;
 
     // create bomb
-    if (Phaser.Input.Keyboard.JustDown(bombKey) && !player.isFollowing())
+    if (Phaser.Input.Keyboard.JustDown(operateKey) && !player.isFollowing())
     {
         if(bombs.countActive() < bombsMaxNum)
             CreateBomb();
@@ -617,10 +639,12 @@ function changeCubeColor(x,y){
     if(mapData[x][y] > 0 && mapData[x][y] < cubeTypeNum){
         mapData[x][y] += 1;
         cubes[x][y].setTexture(cubeSprites[mapData[x][y]-1]);
+        score += scoreBase;
     }
     else if(mapData[x][y] == cubeTypeNum && !isChangePermanent){
         mapData[x][y] = 1;
         cubes[x][y].setTexture(cubeSprites[0]);
+        score += scoreBase;
     }
     //Judge Win
     WinCondition();
@@ -642,6 +666,8 @@ function WinCondition(){
     if(isWinner){
         gameState = 1;
         winText.alpha = 1;
+        player.stopFollow();
+        redBall.stopFollow();
     }
 
     return isWinner;
@@ -650,7 +676,7 @@ function WinCondition(){
 function LoseCondition(){
     var isLoser = false;
     //Player out of bounds
-    if(playerData.x<0 || playerData.y<0 || playerData.x+playerData.y >= mapSize)
+    if(playerData.x<0 || playerData.y<0 || playerData.x + playerData.y >= mapSize)
         isLoser = true;
     //distance between player and redball
     if(RBisActive){
@@ -667,6 +693,17 @@ function LoseCondition(){
         redBall.stopFollow();
     }
     return isLoser;
+}
+
+function NextLevel(scene){
+    if(currentLevel == 3){
+        currentLevel = 1;
+        scene.start('menu');
+    }
+    else{
+        currentLevel++;
+        scene.restart();
+    }
 }
 
 </script>
