@@ -68,7 +68,7 @@ var currentLevel = 1; //1level1 2level2 3level3
 var levelConfig = new Array();
 levelConfig[0] = {cubeTypeNum: 2, isChangePermanent: true};
 levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
-levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
+levelConfig[2] = {cubeTypeNum: 2, isChangePermanent: false};
 var cubeTypeNum;
 var isChangePermanent;
 
@@ -160,7 +160,12 @@ function init()
     // Init level
     cubeTypeNum = levelConfig[currentLevel-1].cubeTypeNum;
     isChangePermanent = levelConfig[currentLevel-1].isChangePermanent;
-    cubeSprites = new Array('cube1','cube2','cube3');
+    if(currentLevel==1)
+        cubeSprites = new Array('cube2','cube1');
+    else if(currentLevel==2)
+        cubeSprites = new Array('cube3','cube4','cube1');
+    else if(currentLevel==3)
+        cubeSprites = new Array('cube3','cube4');
 
     // Init map
     mapStartPos = {pos_x: 350, pos_y: 130};
@@ -207,7 +212,7 @@ function init()
       ini_pos_y: 90,
       scale: 0.7,
       bornTime: 5000,
-      respawnTime: 5000,
+      respawnTime: 10000,
       followSpeed: 1000
     };
 
@@ -221,9 +226,10 @@ function init()
 function preload ()
 {
     // Load resources
-    this.load.image('cube1', 'assets/images/cube1.png');
-    this.load.image('cube2', 'assets/images/cube2.png');
-    this.load.image('cube3', 'assets/images/cube3.png');
+    this.load.image('cube1', 'assets/images/clenaing_cube.png');
+    this.load.image('cube2', 'assets/images/mud_cube.png');
+    this.load.image('cube3', 'assets/images/puddle_cube.png');
+    this.load.image('cube4', 'assets/images/suds_cube.png');
     this.load.image('soap_bar','assets/images/soap_bar.png');
     this.load.spritesheet('bubble','assets/images/bubble.png', { frameWidth: 50, frameHeight: 50 });
     this.load.image('bomb_explosion','assets/images/bubble_boom.png');
@@ -232,10 +238,16 @@ function preload ()
     this.load.spritesheet('duck_right', 'assets/images/duck3.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('duck_up', 'assets/images/duck4.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('mud_ball', 'assets/images/mud_ball.png', { frameWidth: 120, frameHeight: 80 });
+    this.load.image('background', 'assets/images/background.png');
+    this.load.image('backgroundBubble', 'assets/images/background-bubble.png');
 }
 
 function create ()
 {
+    // background
+    this.add.image(0, 0, 'background').setOrigin(0);
+    this.add.image(0, 0, 'backgroundBubble').setOrigin(0);
+
     // Draw cubes
     cubes = new Array(mapSize);
     for(var i = 0; i < mapSize; i++)
@@ -331,6 +343,7 @@ function create ()
             this.cubex = cx;
             this.cubey = cy;
             this.setPosition(x, y);
+            this.able = true;
 
             this.setActive(true);
             this.setVisible(true);
@@ -338,22 +351,28 @@ function create ()
 
         burstTimeout: function(time)
         {
-            setTimeout(this.remove.bind(this), time);
+            setTimeout(this.burst.bind(this), time);
+        },
+
+        // when colliding with red ball
+        disable: function()
+        {
+            this.able = false;
+            this.setActive(false);
+            this.setVisible(false);
         },
 
         burst: function()
         {
-            setTimeout(this.remove.bind(this), 100);
-        },
+            if(!this.able)
+                return;
 
-        remove:function()
-        {
             var explosion = explosions.get();
             if(explosion)
                 explosion.create(this.x, this.y, this.cubex, this.cubey, 500);
             this.setActive(false);
             this.setVisible(false);
-        }
+        },
     });
 
     bombs = this.add.group({
@@ -388,10 +407,10 @@ function create ()
             setTimeout(this.remove.bind(this), time);
 
             // Destroy red ball if it is closed to explosion
-            var explosionCenter = this.getCenter();
-            var distance = explosionCenter.distance(redBall.getCenter())
-            if(distance < 50)
-                ResetBall();
+            //var explosionCenter = this.getCenter();
+            //var distance = explosionCenter.distance(redBall.getCenter())
+            //if(distance < 50)
+                //ResetBall();
         },
 
         remove: function()
@@ -435,10 +454,10 @@ function create ()
     loseText.alpha = 0;
 
     // Init score
-    scoreText = this.add.text(10, 30, 'Score: '+ score);
+    scoreText = this.add.text(10, 30, 'Score: '+ score).setColor('#000000');
 
     // Level UI
-    this.add.text(10, 10, 'Level: ' + currentLevel);
+    this.add.text(10, 10, 'Level: ' + currentLevel).setColor('#000000');
 
     // Init bombs UI
     bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:65, stepX:24}, setScale:{x: 0.4}});
@@ -447,7 +466,7 @@ function create ()
     //setTimeout(addSoap, 8000);
 
     // Init target
-    this.add.text(690, 10, 'Change To').setOrigin(1,0);
+    this.add.text(690, 10, 'Change To').setOrigin(1,0).setColor('#000000');
     this.add.image(672, 35, cubeSprites[cubeTypeNum-1]).setOrigin(1,0).setScale(0.5);
 }
 
@@ -470,6 +489,11 @@ function update ()
         currentLevel = 1;
         score = 0;
         this.scene.restart();
+        ResetBall();
+        var children = bombs.getChildren();
+        for(var i=0; i<children.length; i++)
+            if(children[i].active)
+                children[i].disable();
     }
 
     if(gameState != 0)
@@ -485,6 +509,7 @@ function update ()
     PlayerMove();
     // red ball move
     if(RBisActive){
+        CheckRedballCollision();
         RBMove();
         LoseCondition();
     }
@@ -513,7 +538,7 @@ function removeSoap(){
 }
 
 function UpdateScore(){
-    scoreText.setText('Score: '+ score);
+    scoreText.setText('Score: '+ score).setColor('#000000');
 }
 
 function UpdateBombsUI(){
@@ -795,7 +820,27 @@ function NextLevel(scene){
     else{
         currentLevel++;
         scene.restart();
+        ResetBall();
+        var children = bombs.getChildren();
+        for(var i=0; i<children.length; i++)
+            if(children[i].active)
+                children[i].disable();
     }
+}
+
+function CheckRedballCollision(){
+    var children = bombs.getChildren();
+    for(var i=0; i<children.length; i++){
+        if(children[i].active){
+            var distance = children[i].getCenter().distance(redBall.getCenter());
+            if(distance < 30){
+                ResetBall();
+                children[i].disable();
+                break;
+            }
+        }
+    }
+
 }
 
 </script>
