@@ -6,26 +6,6 @@
 <body>
 
 <script>
-
-var config = {
-    type: Phaser.AUTO,
-    width: 700,
-    height: 700,
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 300 },
-            debug: false
-        }
-    },
-    scene: {
-        init: init,
-        preload: preload,
-        create: create,
-        update: update
-    }
-};
-
 // Map
 var mapStartPos;
 var mapSize;
@@ -74,8 +54,8 @@ var leftKey;
 var rightKey;
 var upKey;
 var downKey;
-var restartKey;
-var bombKey;
+var operateKey; //place a bomb, continue, restart ...
+var cheatKey;
 
 // UI
 var winText;
@@ -84,7 +64,7 @@ var scoreText;
 var bombsUI;
 
 // Level
-var currentLevel = 3; //1level1 2level2 3level3
+var currentLevel = 1; //1level1 2level2 3level3
 var levelConfig = new Array();
 levelConfig[0] = {cubeTypeNum: 2, isChangePermanent: true};
 levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
@@ -92,10 +72,88 @@ levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
 var cubeTypeNum;
 var isChangePermanent;
 
-// Game
+// Score
+var score = 0;
+var scoreBase = 50;
+
+// Game & Scene
+var gameScene = {
+    key: 'game',
+    init: init,
+    preload: preload,
+    create: create,
+    update: update
+};
+
+var menuScene = {
+    key: 'menu',
+    preload: menuPreload,
+    create: menuCreate,
+    update: menuUpdate
+};
+
+var config = {
+    type: Phaser.AUTO,
+    width: 700,
+    height: 700,
+    scene: [menuScene, gameScene]
+};
+
 var gameState; //0 start 1 win 2 lose
 var game = new Phaser.Game(config);
-var score;
+
+// Duck image animation in menu
+var duckImages = new Array();
+var duckMaxRotation = 0.5;
+var duckDirsDefault = new Array(1,-1,1,-1);
+var duckDirsCurrent = new Array(1,-1,1,-1);
+var duckRotateSpeed = 0.02;
+
+function menuPreload()
+{
+    this.load.image('background', 'assets/images/background.png');
+    this.load.image('backgroundBubble', 'assets/images/background-bubble.png');
+    this.load.image('instruction', 'assets/images/Instruction.png');
+    this.load.image('title', 'assets/images/Title.png');
+    this.load.spritesheet('startButton','assets/images/Start button.png', { frameWidth: 139, frameHeight: 57 });
+    this.load.spritesheet('duck_left', 'assets/images/duck1.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_down', 'assets/images/duck2.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_right', 'assets/images/duck3.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('duck_up', 'assets/images/duck4.png', { frameWidth: 64, frameHeight: 64 });
+}
+
+function menuCreate()
+{
+    this.add.image(0, 0, 'background').setOrigin(0);
+    this.add.image(0, 0, 'backgroundBubble').setOrigin(0);
+    this.add.image(350, 220, 'title').setOrigin(0.5);
+    this.add.image(350, 435, 'instruction').setOrigin(0.5);
+
+    var duckDistance = 80;
+    var duckY = 345;
+    duckImages[0] = this.add.image(350 - 1.5 * duckDistance, duckY, 'duck_left').setOrigin(0.5);
+    duckImages[1] = this.add.image(350 - 0.5 * duckDistance, duckY, 'duck_down').setOrigin(0.5);
+    duckImages[2] = this.add.image(350 + 0.5 * duckDistance, duckY, 'duck_up').setOrigin(0.5);
+    duckImages[3] = this.add.image(350 + 1.5 * duckDistance, duckY, 'duck_right').setOrigin(0.5);
+
+    var startButton = this.add.sprite(350, 545, 'startButton').setOrigin(0.5);
+    startButton.setInteractive();
+    startButton.on('pointerdown', () => { this.scene.start('game'); });
+    startButton.on('pointerover', () => { startButton.setTexture('startButton', 1); });
+    startButton.on('pointerout', () => { startButton.setTexture('startButton', 0); });
+}
+
+function menuUpdate(){
+    for (var i=0; i<duckImages.length; i++){
+        duckImages[i].rotation += duckDirsCurrent[i] * duckRotateSpeed;
+        if(duckDirsDefault[i]==1)
+            if(duckImages[i].rotation <= 0 || duckImages[i].rotation >= duckMaxRotation)
+                duckDirsCurrent[i] = -duckDirsCurrent[i];
+        if(duckDirsDefault[i]==-1)
+            if(duckImages[i].rotation >= 0 || duckImages[i].rotation <= -duckMaxRotation)
+                duckDirsCurrent[i] = -duckDirsCurrent[i];
+    }
+}
 
 function init()
 {
@@ -166,7 +224,7 @@ function preload ()
     this.load.image('cube1', 'assets/images/cube1.png');
     this.load.image('cube2', 'assets/images/cube2.png');
     this.load.image('cube3', 'assets/images/cube3.png');
-    this.load.image('soap_bar','assets/images/soap_bar.png', { frameWidth: 50, frameHeight: 50 });
+    this.load.image('soap_bar','assets/images/soap_bar.png');
     this.load.spritesheet('bubble','assets/images/bubble.png', { frameWidth: 50, frameHeight: 50 });
     this.load.image('bomb_explosion','assets/images/bubble_boom.png');
     this.load.spritesheet('duck_left', 'assets/images/duck1.png', { frameWidth: 64, frameHeight: 64 });
@@ -241,8 +299,8 @@ function create ()
     rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
     upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     downKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-    bombKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    operateKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    cheatKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
 
     //set up soap class
     var Soap = new Phaser.Class({
@@ -329,6 +387,7 @@ function create ()
             this.setVisible(true);
             setTimeout(this.remove.bind(this), time);
 
+            // Destroy red ball if it is closed to explosion
             var explosionCenter = this.getCenter();
             var distance = explosionCenter.distance(redBall.getCenter())
             if(distance < 50)
@@ -340,12 +399,12 @@ function create ()
             changeCubeColor(this.cubex, this.cubey);
             if(explosionUpgrade == true)
             {
-              changeCubeColor(this.cubex - 1, this.cubey);
-              changeCubeColor(this.cubex, this.cubey - 1);
-              changeCubeColor(this.cubex + 1, this.cubey - 1);
-              changeCubeColor(this.cubex + 1, this.cubey);
-              changeCubeColor(this.cubex, this.cubey + 1);
-              changeCubeColor(this.cubex - 1, this.cubey + 1);
+                changeCubeColor(this.cubex - 1, this.cubey);
+                changeCubeColor(this.cubex, this.cubey - 1);
+                changeCubeColor(this.cubex + 1, this.cubey - 1);
+                changeCubeColor(this.cubex + 1, this.cubey);
+                changeCubeColor(this.cubex, this.cubey + 1);
+                changeCubeColor(this.cubex - 1, this.cubey + 1);
             }
             explosionUpgrade = false;
             this.setActive(false);
@@ -359,30 +418,34 @@ function create ()
     });
 
     // Init win&lose UI
-    winText = this.add.text(350, 300, 'You Win!');
+    winText = this.add.text(350, 300, 'Level '+ currentLevel + ' Complete!\nPress Space to Continue.');
     winText.setOrigin(0.5, 0.5);
     winText.setStyle({
-        fontSize: '42px',
-        color: '#000000',
+        fontSize: '36px',
+        color: '#FF0000',
     });
     winText.alpha = 0;
 
-    loseText = this.add.text(350, 300, 'Game over!');
+    loseText = this.add.text(350, 300, 'Game Over!\nPress Space to Restart.');
     loseText.setOrigin(0.5, 0.5);
     loseText.setStyle({
-        fontSize: '42px',
-        color: '#000000',
+        fontSize: '36px',
+        color: '#FF0000',
     });
     loseText.alpha = 0;
 
     // Init score
-    score = 0;
-    scoreText = this.add.text(10, 10, 'Score: 0');
+    scoreText = this.add.text(10, 30, 'Score: '+ score);
+
+    // Level UI
+    this.add.text(10, 10, 'Level: ' + currentLevel);
 
     // Init bombs UI
-    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:40, stepX:24}, setScale:{x: 0.4}});
+    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:65, stepX:24}, setScale:{x: 0.4}});
+
     addSoap();
     //setTimeout(addSoap, 8000);
+
     // Init target
     this.add.text(690, 10, 'Change To').setOrigin(1,0);
     this.add.image(672, 35, cubeSprites[cubeTypeNum-1]).setOrigin(1,0).setScale(0.5);
@@ -390,14 +453,30 @@ function create ()
 
 function update ()
 {
+
+    if(Phaser.Input.Keyboard.JustDown(cheatKey)){
+        gameState = 1;
+        winText.alpha = 1;
+        player.stopFollow();
+        redBall.stopFollow();
+    }
+
+    // next level
+    if(gameState == 1 && Phaser.Input.Keyboard.JustDown(operateKey))
+        NextLevel(this.scene);
+
     // restart
-    if(Phaser.Input.Keyboard.JustDown(restartKey))
+    if(gameState == 2 && Phaser.Input.Keyboard.JustDown(operateKey)){
+        currentLevel = 1;
+        score = 0;
         this.scene.restart();
+    }
+
     if(gameState != 0)
         return;
 
     // create bomb
-    if (Phaser.Input.Keyboard.JustDown(bombKey) && !player.isFollowing())
+    if (Phaser.Input.Keyboard.JustDown(operateKey) && !player.isFollowing())
     {
         if(bombs.countActive() < bombsMaxNum)
             CreateBomb();
@@ -409,6 +488,7 @@ function update ()
         RBMove();
         LoseCondition();
     }
+
     if(playerData.x == soapCubex && playerData.y == soapCubey)
     {
       explosionUpgrade = true;
@@ -617,10 +697,12 @@ function changeCubeColor(x,y){
     if(mapData[x][y] > 0 && mapData[x][y] < cubeTypeNum){
         mapData[x][y] += 1;
         cubes[x][y].setTexture(cubeSprites[mapData[x][y]-1]);
+        score += scoreBase;
     }
     else if(mapData[x][y] == cubeTypeNum && !isChangePermanent){
         mapData[x][y] = 1;
         cubes[x][y].setTexture(cubeSprites[0]);
+        score += scoreBase;
     }
     //Judge Win
     WinCondition();
@@ -676,6 +758,8 @@ function WinCondition(){
     if(isWinner){
         gameState = 1;
         winText.alpha = 1;
+        player.stopFollow();
+        redBall.stopFollow();
     }
 
     return isWinner;
@@ -684,7 +768,7 @@ function WinCondition(){
 function LoseCondition(){
     var isLoser = false;
     //Player out of bounds
-    if(playerData.x<0 || playerData.y<0 || playerData.x+playerData.y >= mapSize)
+    if(playerData.x<0 || playerData.y<0 || playerData.x + playerData.y >= mapSize)
         isLoser = true;
     //distance between player and redball
     if(RBisActive){
@@ -701,6 +785,17 @@ function LoseCondition(){
         redBall.stopFollow();
     }
     return isLoser;
+}
+
+function NextLevel(scene){
+    if(currentLevel == 3){
+        currentLevel = 1;
+        scene.start('menu');
+    }
+    else{
+        currentLevel++;
+        scene.restart();
+    }
 }
 
 </script>
