@@ -5,6 +5,17 @@
 </head>
 <body>
 
+<style media='screen' type='text/css'>
+      @font-face {
+        font-family: font1;
+        src: url('assets/fonts/munro.ttf');
+        font-weight:400;
+        font-weight:normal;
+      }
+</style>
+    
+<div style="font-family:font1; position:absolute; left:-1000px; visibility:hidden;">.</div>
+    
 <script>
 // Map
 var mapStartPos;
@@ -29,6 +40,8 @@ var RBisMovingPreviousFrame;
 var RBisActive;
 var RBresetCount = 0;
 var RBlatestReset;
+var RBExplosion;
+var RBexplosionRemoveTime;
 
 // Bomb
 var bombs;
@@ -36,11 +49,15 @@ var bombsMaxNum;
 var bomb_offset_y;
 var explosions;
 var bombRemoveTime;
+var explosionRemoveTime;
 
 var locx;
 var locy;
 var cubex;
 var cubey;
+    
+var superBubble;
+var superBubbleScale;
 
 // Initialize the soap
 var soap;
@@ -48,6 +65,7 @@ var soapx;
 var soapy;
 var soapCubex;
 var soapCubey;
+var soapIntervalTime;
 var SisActive;
 var explosionUpgrade;
 
@@ -62,6 +80,7 @@ var cheatKey;
 // UI
 var winText;
 var loseText;
+var loseAnim;
 var scoreText;
 var bombsUI;
 
@@ -73,6 +92,8 @@ levelConfig[1] = {cubeTypeNum: 3, isChangePermanent: true};
 levelConfig[2] = {cubeTypeNum: 3, isChangePermanent: false};
 var cubeTypeNum;
 var isChangePermanent;
+var levelIcon;    
+
 
 // Score
 var score = 0;
@@ -96,9 +117,10 @@ var menuScene = {
 
 var config = {
     type: Phaser.AUTO,
-    width: 700,
+    width: 1280,
     height: 700,
-    scene: [menuScene, gameScene]
+    scene: [menuScene, gameScene],
+    autoCenter: true
 };
 
 var gameState; //0 start 1 win 2 lose
@@ -111,8 +133,16 @@ var duckDirsDefault = new Array(1,-1,1,-1);
 var duckDirsCurrent = new Array(1,-1,1,-1);
 var duckRotateSpeed = 0.02;
 
+// Sounds
+var music;
+var sound_bubble_pop;
+var sound_ding;
+var sound_squeak;
+var sound_super_bubble_pop;
+    
 function menuPreload()
 {
+    this.load.image('bg', 'assets/images/cabinet_art.png');
     this.load.image('background', 'assets/images/background.png');
     this.load.image('backgroundBubble', 'assets/images/background-bubble.png');
     this.load.image('instruction', 'assets/images/Instruction.png');
@@ -126,19 +156,20 @@ function menuPreload()
 
 function menuCreate()
 {
-    this.add.image(0, 0, 'background').setOrigin(0);
-    this.add.image(0, 0, 'backgroundBubble').setOrigin(0);
-    this.add.image(350, 220, 'title').setOrigin(0.5);
-    this.add.image(350, 435, 'instruction').setOrigin(0.5);
+    this.add.image(0, 0, 'bg').setOrigin(0);
+    this.add.image(config.width/2, config.height/2, 'background').setOrigin(0.5);
+    this.add.image(config.width/2, config.height/2, 'backgroundBubble').setOrigin(0.5);
+    this.add.image(config.width/2, 220, 'title').setOrigin(0.5);
+    this.add.image(config.width/2, 435, 'instruction').setOrigin(0.5);
 
     var duckDistance = 80;
     var duckY = 345;
-    duckImages[0] = this.add.image(350 - 1.5 * duckDistance, duckY, 'duck_left').setOrigin(0.5);
-    duckImages[1] = this.add.image(350 - 0.5 * duckDistance, duckY, 'duck_down').setOrigin(0.5);
-    duckImages[2] = this.add.image(350 + 0.5 * duckDistance, duckY, 'duck_up').setOrigin(0.5);
-    duckImages[3] = this.add.image(350 + 1.5 * duckDistance, duckY, 'duck_right').setOrigin(0.5);
+    duckImages[0] = this.add.image(config.width/2 - 1.5 * duckDistance, duckY, 'duck_left').setOrigin(0.5);
+    duckImages[1] = this.add.image(config.width/2 - 0.5 * duckDistance, duckY, 'duck_down').setOrigin(0.5);
+    duckImages[2] = this.add.image(config.width/2 + 0.5 * duckDistance, duckY, 'duck_up').setOrigin(0.5);
+    duckImages[3] = this.add.image(config.width/2 + 1.5 * duckDistance, duckY, 'duck_right').setOrigin(0.5);
 
-    var startButton = this.add.sprite(350, 545, 'startButton').setOrigin(0.5);
+    var startButton = this.add.sprite(config.width/2, 545, 'startButton').setOrigin(0.5);
     startButton.setInteractive();
     startButton.on('pointerdown', () => { this.scene.start('game'); });
     startButton.on('pointerover', () => { startButton.setTexture('startButton', 1); });
@@ -170,7 +201,7 @@ function init()
         cubeSprites = new Array('cube5','cube4','cube1');
 
     // Init map
-    mapStartPos = {pos_x: 350, pos_y: 130};
+    mapStartPos = {pos_x: config.width/2, pos_y: 130};
 
     mapSize = 7;
     explosionUpgrade = false;
@@ -192,7 +223,7 @@ function init()
     playerData = {
       x: 0,
       y: 0,
-      ini_pos_x: 350,
+      ini_pos_x: config.width/2,
       ini_pos_y: 85,
       scale: 1,
       followSpeed: 600
@@ -205,21 +236,26 @@ function init()
     bomb_offset_y = 0;
     bombsMaxNum = 5;
     bombRemoveTime = 3000;
+    explosionRemoveTime = 600;
+    superBubbleScale = 3;
 
     // Init redBall
     redBallData = {
       x: 0,
       y: 0,
-      ini_pos_x: 350,
+      ini_pos_x: config.width/2,
       ini_pos_y: 85,
       scale: 0.7,
-      bornTime: 5000,
+      bornTime: 7000,
       respawnTime: 10000,
       followSpeed: 1000
     };
 
     RBisMovingPreviousFrame = true;
     RBisActive = false;
+    RBexplosionRemoveTime = 400;
+    
+    soapIntervalTime = 10000;
 
     // Init gameState
     gameState = 0;
@@ -241,15 +277,39 @@ function preload ()
     this.load.spritesheet('duck_right', 'assets/images/duck3.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('duck_up', 'assets/images/duck4.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('mud_ball', 'assets/images/mud_ball.png', { frameWidth: 120, frameHeight: 80 });
+    this.load.image('mud_ball_explosion', 'assets/images/when_mud_ball_meet_bubble_ball.png');
     this.load.image('background', 'assets/images/background.png');
     this.load.image('backgroundBubble', 'assets/images/background-bubble.png');
+    this.load.image('bg', 'assets/images/cabinet_art.png');
+    
+    // Audio
+    this.load.audio('bubble_pop', 'assets/audio/bubble_pop.ogg');
+    this.load.audio('ding', 'assets/audio/elevator_ding.ogg');
+    this.load.audio('music', 'assets/audio/soap_freeze_music.ogg');
+    this.load.audio('squeak', 'assets/audio/squeak_sound.ogg');
+    this.load.audio('super_bubble_pop', 'assets/audio/super_bubble_pop.ogg');
+    
+    // Level&Gameover
+    this.load.image('level1_0', 'assets/images/Lvl_1_Frame1.png');
+    this.load.image('level1_1', 'assets/images/Lvl_1_Frame2.png');
+    //this.load.image('level1_2', 'assets/images/Lvl_1_Frame3.png');
+    this.load.image('level2_0', 'assets/images/Lvl_2_Frame1.png');
+    this.load.image('level2_1', 'assets/images/Lvl_2_Frame2.png');
+    this.load.image('level2_2', 'assets/images/Lvl_2_Frame3.png');
+    this.load.image('level3_0', 'assets/images/Lvl_3_Frame1.png');
+    this.load.image('level3_1', 'assets/images/Lvl_3_Frame2.png');
+    this.load.image('level3_2', 'assets/images/Lvl_3_Frame3.png');
+    this.load.image('gameOver_0', 'assets/images/GameOver_Frame1.png');
+    this.load.image('gameOver_1', 'assets/images/GameOver_Frame2.png');
+    this.load.image('gameOver_2', 'assets/images/GameOver_Frame3.png');
 }
 
 function create ()
 {
     // background
-    this.add.image(0, 0, 'background').setOrigin(0);
-    this.add.image(0, 0, 'backgroundBubble').setOrigin(0);
+    this.add.image(0, 0, 'bg').setOrigin(0);
+    this.add.image(config.width/2, config.height/2, 'background').setOrigin(0.5);
+    this.add.image(config.width/2, config.height/2, 'backgroundBubble').setOrigin(0.5);
 
     // Draw cubes
     cubes = new Array(mapSize);
@@ -311,6 +371,26 @@ function create ()
         repeat: 0
     });
 
+    class RedBallExplosion extends Phaser.GameObjects.Sprite {
+        constructor(config) {
+            super(config.scene, config.x, config.y, "mud_ball_explosion");
+            config.scene.add.existing(this);
+            this.remove();
+        }
+
+        create(x,y,time){
+            this.setActive(true).setVisible(true);
+            this.setPosition(x, y);
+            setTimeout(this.remove.bind(this), time);
+        }
+
+        remove()
+        {
+          	this.setActive(false).setVisible(false);
+        }
+    }
+    RBExplosion = new RedBallExplosion({scene:this, x:50, y:50});
+
     // Add keyboard keys
     leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
     rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
@@ -341,6 +421,7 @@ function create ()
         function Bomb (scene)
         {
             Phaser.GameObjects.Image.call(this, scene, 0, 0, 'bubble');
+            this.count = 0;
         },
 
         create: function (x, y, cx, cy)
@@ -352,11 +433,8 @@ function create ()
 
             this.setActive(true);
             this.setVisible(true);
-        },
-
-        burstTimeout: function(time)
-        {
-            setTimeout(this.burst.bind(this), time);
+            this.count+=1;
+            setTimeout(this.burst.bind(this,this.count), bombRemoveTime);
         },
 
         // when colliding with red ball
@@ -367,17 +445,19 @@ function create ()
             this.setVisible(false);
         },
 
-        burst: function()
+        burst: function(count)
         {
             if(!this.able)
+                return;
+            if(count!=this.count)
                 return;
 
             var explosion = explosions.get();
             if(explosion)
-                explosion.create(this.x, this.y, this.cubex, this.cubey, 500);
+                explosion.create(this.x, this.y, this.cubex, this.cubey, explosionRemoveTime);
             this.setActive(false);
             this.setVisible(false);
-        },
+        }
     });
 
     bombs = this.add.group({
@@ -387,8 +467,8 @@ function create ()
 
     this.anims.create({
         key: 'bubble_burst',
-        frames: this.anims.generateFrameNumbers('bubble', { start: 0, end: 4 }),
-        frameRate: 10,
+        frames: this.anims.generateFrameNumbers('bubble', { start: 0, end: 5 }),
+        frameRate: 15,
         repeat: 0
     });
 
@@ -403,6 +483,7 @@ function create ()
 
         create: function (x, y, cx, cy, time)
         {
+            sound_bubble_pop.play();
             this.play('bubble_burst');
             this.cubex = cx;
             this.cubey = cy;
@@ -454,40 +535,201 @@ function create ()
         maxSize: bombsMaxNum
     });
 
+    // superbubble
+    class SuperBubble extends Phaser.GameObjects.Sprite {
+        constructor(config) {
+            super(config.scene, config.x, config.y, "bubble");
+            config.scene.add.existing(this);
+            this.setOrigin(0.5, 0.5);
+            this.setScale(superBubbleScale);
+            this.setActive(false).setVisible(false);
+        }
+
+        create(px,py,branch,time){
+            this.able = true;
+            this.setActive(true).setVisible(true); 
+            
+            this.play('bubble_burst');
+            sound_super_bubble_pop.play();
+            setTimeout(this.remove.bind(this), time);
+            
+            // Position
+            var superBubbleX = mapStartPos.pos_x + cubeLength.x * (py - px);
+            var superBubbleY = mapStartPos.pos_y + cubeLength.y * (px + py);
+            var x_offset = cubeLength.x;
+            var y_offset = cubeLength.y/2;
+            var extra_y_offset = -30;
+            switch(branch) {
+                case 1:
+                    //l&lup
+                    superBubbleX -= x_offset;
+                    superBubbleY -= y_offset;
+                    break;
+                case 2:
+                    //lup&rup
+                    superBubbleY -= y_offset + extra_y_offset;
+                    break;
+                case 3:
+                    //rup&r
+                    superBubbleX += x_offset;
+                    superBubbleY -= y_offset;
+                    break;
+                case 4:
+                    //r&rdown
+                    superBubbleX += x_offset;
+                    superBubbleY += y_offset + extra_y_offset;
+                    break;
+                case 5:
+                    //rdown&ldown
+                    superBubbleY += y_offset;
+                    break;
+                case 6:
+                    //ldown&l
+                    superBubbleX -= x_offset;
+                    superBubbleY += y_offset + extra_y_offset;
+                    break;
+
+            } 
+            this.setPosition(superBubbleX, superBubbleY);
+            this.px = px;
+            this.py = py;
+            this.branch = branch
+        }
+
+        remove()
+        {
+            if(this.able){
+                this.setActive(false).setVisible(false);
+                var px = this.px, py = this.py;
+                switch(this.branch) {
+                    case 1:
+                        //l&lup
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px+1,py-1);changeCubeColor(px+1,py-1);
+                        changeCubeColor(px,py-1);changeCubeColor(px,py-1);
+                        break;
+                    case 2:
+                        //lup&rup
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px,py-1);changeCubeColor(px,py-1);
+                        changeCubeColor(px-1,py);changeCubeColor(px-1,py);
+                        break;
+                    case 3:
+                        //rup&r
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px-1,py);changeCubeColor(px-1,py);
+                        changeCubeColor(px-1,py+1);changeCubeColor(px-1,py+1);
+                        break;
+                    case 4:
+                        //r&rdown
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px-1,py+1);changeCubeColor(px-1,py+1);
+                        changeCubeColor(px,py+1);changeCubeColor(px,py+1);
+                        break;
+                    case 5:
+                        //rdown&ldown
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px,py+1);changeCubeColor(px,py+1);
+                        changeCubeColor(px+1,py);changeCubeColor(px+1,py);
+                        break;
+                    case 6:
+                        //ldown&l
+                        changeCubeColor(px,py);changeCubeColor(px,py);
+                        changeCubeColor(px+1,py);changeCubeColor(px+1,py);
+                        changeCubeColor(px+1,py-1);changeCubeColor(px+1,py-1);
+                        break;
+                }
+            }
+        }
+
+        disable()
+        {
+            this.able = false;
+            this.setActive(false).setVisible(false);
+        }
+    }
+    superBubble = new SuperBubble({scene:this, x:100, y:100});
+    
     // Init win&lose UI
-    winText = this.add.text(350, 300, 'Level '+ currentLevel + ' Complete!\nPress Space to Continue.');
-    winText.setOrigin(0.5, 0.5);
+    winText = this.add.text(config.width/2, 350, 'Level Complete! Press Space to Continue.').setOrigin(0.5, 0.5);
     winText.setStyle({
-        fontSize: '36px',
-        color: '#FF0000',
+        fontFamily: 'font1',
+        fontSize: '32px',
+        color: '#000000',
     });
     winText.alpha = 0;
 
-    loseText = this.add.text(350, 300, 'Game Over!\nPress Space to Restart.');
-    loseText.setOrigin(0.5, 0.5);
+    loseText = this.add.text(config.width/2, 450, 'Press Space to Restart.').setOrigin(0.5, 0.5);
     loseText.setStyle({
-        fontSize: '36px',
-        color: '#FF0000',
+        fontFamily: 'font1',
+        fontSize: '32px',
+        color: '#000000',
     });
     loseText.alpha = 0;
+    
+    this.anims.create({
+        key: 'gameover',
+        frames: [
+            { key: 'gameOver_0' },
+            { key: 'gameOver_1' },
+            { key: 'gameOver_2' },
+        ],
+        frameRate: 8,
+        repeat: 0
+    });
+    loseAnim = this.add.sprite(config.width/2, 350, 'gameOver_0').setOrigin(0.5).play('gameover');
+    loseAnim.setVisible(false);
 
     // Init score
-    scoreText = this.add.text(10, 30, 'Score: '+ score).setColor('#000000');
+    scoreText = this.add.text(300, 30, 'Score:  '+ score, {fontFamily: 'font1', color: '#000000'});
 
     // Level UI
-    this.add.text(10, 10, 'Level: ' + currentLevel).setColor('#000000');
+    this.add.text(300, 10, 'Level:  ' + currentLevel, {fontFamily: 'font1', color: '#000000'});
 
     // Init bombs UI
-    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:20, y:65, stepX:24}, setScale:{x: 0.4}});
+    bombsUI = this.add.group({key:'bubble', frame:0, repeat:bombsMaxNum-1, setXY:{x:310, y:65, stepX:24}, setScale:{x: 0.4}});
 
     addSoap();
     //setTimeout(addSoap, 8000);
 
     // Init target
-    this.add.text(675, 10, 'Target').setOrigin(1,0).setColor('#000000');
-    this.add.image(675, 35, cubeSprites[cubeTypeNum-1]).setOrigin(1,0).setScale(0.6);
+    this.add.text(958, 10, 'Target', {fontFamily: 'font1', color: '#000000'}).setOrigin(1,0);
+    this.add.image(965, 35, cubeSprites[cubeTypeNum-1]).setOrigin(1,0).setScale(0.6);
+    
+    // Init music&sounds
+    if(music == null){
+        music = this.sound.add('music');
+        music.loop = true;
+        music.play();
+    }
+    
+    sound_bubble_pop = this.sound.add('bubble_pop');
+    sound_ding = this.sound.add('ding');
+    sound_ding.play();
+    sound_squeak = this.sound.add('squeak');
+    sound_super_bubble_pop = this.sound.add('super_bubble_pop');
+    
+    // Level icon
+    this.anims.create({
+        key: 'level'+currentLevel,
+        frames: [
+            { key: 'level'+ currentLevel + '_0' },
+            { key: 'level'+ currentLevel + '_1' },
+            { key: 'level'+ currentLevel + '_0' },
+            { key: 'level'+ currentLevel + '_1' }
+        ],
+        frameRate: 8,
+        repeat: 0
+    });
+    
+    levelIcon = this.add.sprite(config.width/2, 350, 'level'+ currentLevel + '_0').setOrigin(0.5).play('level'+currentLevel);
+    setTimeout(closeLevelIcon,1500);
 }
 
+function closeLevelIcon(){
+    levelIcon.setActive(false).setVisible(false);
+}    
+    
 function update ()
 {
 
@@ -508,10 +750,15 @@ function update ()
         score = 0;
         this.scene.restart();
         ResetBall();
-        var children = bombs.getChildren();
-        for(var i=0; i<children.length; i++)
-            if(children[i].active)
-                children[i].disable();
+        var bombsChildren = bombs.getChildren();
+        for(var i=0; i<bombsChildren.length; i++)
+            if(bombsChildren[i].active)
+                bombsChildren[i].disable();
+        var explosionsChildren = explosions.getChildren();
+        for(var i=0; i<explosionsChildren.length; i++)
+            if(explosionsChildren[i].active)
+                explosionsChildren[i].disable();
+        superBubble.disable();
     }
 
     if(gameState != 0)
@@ -532,10 +779,10 @@ function update ()
         LoseCondition();
     }
 
-    if(playerData.x == soapCubex && playerData.y == soapCubey)
+    if(soap.getCenter().distance(player.getCenter())<30)
     {
-      explosionUpgrade = true;
-      removeSoap();
+        explosionUpgrade = true;
+        removeSoap();
     }
     // Update UI
     UpdateScore();
@@ -551,12 +798,11 @@ function addSoap(){
 function removeSoap(){
   soap.setPosition(-80, 0);
   SisActive = false;
-  var wait = 0;
-  addSoap();
+  setTimeout(addSoap,soapIntervalTime);
 }
 
 function UpdateScore(){
-    scoreText.setText('Score: '+ score).setColor('#000000');
+    scoreText.setText('Score:  '+ score);
 }
 
 function UpdateBombsUI(){
@@ -571,11 +817,11 @@ function UpdateBombsUI(){
 
 function CreateBomb(){
     var bomb = bombs.get();
-    if(bomb){
+    if(bomb)
         bomb.create(player.x, player.y + bomb_offset_y, playerData.x, playerData.y);
-        bomb.burstTimeout(bombRemoveTime);
-    }
+    
 
+    //super bubble
     var px = playerData.x, py = playerData.y;
     var bombsChildren = bombs.getChildren();
     var lup = -1,rup = -1,l = -1,r = -1,ldown = -1,rdown = -1;//record index
@@ -599,41 +845,40 @@ function CreateBomb(){
         bomb.disable();
         bombsChildren[l].disable();
         bombsChildren[lup].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px+1,py-1);changeCubeColor(px+1,py-1);changeCubeColor(px,py-1);changeCubeColor(px,py-1);
+        superBubble.create(px,py,1,explosionRemoveTime);
     }
     else if(lup!=-1 && rup!=-1){
         bomb.disable();
         bombsChildren[lup].disable();
         bombsChildren[rup].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px,py-1);changeCubeColor(px,py-1);changeCubeColor(px-1,py);changeCubeColor(px-1,py);
+        superBubble.create(px,py,2,explosionRemoveTime);
     }
     else if(rup!=-1 && r!=-1){
         bomb.disable();
         bombsChildren[rup].disable();
         bombsChildren[r].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px-1,py);changeCubeColor(px-1,py);changeCubeColor(px-1,py+1);changeCubeColor(px-1,py+1);
+        superBubble.create(px,py,3,explosionRemoveTime);
     }
     else if(r!=-1 && rdown!=-1){
         bomb.disable();
         bombsChildren[r].disable();
         bombsChildren[rdown].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px-1,py+1);changeCubeColor(px-1,py+1);changeCubeColor(px,py+1);changeCubeColor(px,py+1);
+        superBubble.create(px,py,4,explosionRemoveTime);
     }
     else if(rdown!=-1 && ldown!=-1){
         bomb.disable();
         bombsChildren[rdown].disable();
         bombsChildren[ldown].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px,py+1);changeCubeColor(px,py+1);changeCubeColor(px+1,py);changeCubeColor(px+1,py);
+        superBubble.create(px,py,5,explosionRemoveTime);
     }
     else if(ldown!=-1 && l!=-1){
         bomb.disable();
         bombsChildren[ldown].disable();
         bombsChildren[l].disable();
-        changeCubeColor(px,py);changeCubeColor(px,py);changeCubeColor(px+1,py);changeCubeColor(px+1,py);changeCubeColor(px+1,py-1);changeCubeColor(px+1,py-1);
+        superBubble.create(px,py,6,explosionRemoveTime);
     }
-
 }
-
+    
 
 function removeAllBombs(time){
     var children = bombs.getChildren();
@@ -698,24 +943,28 @@ function PlayerMove(){
     // Movement
     if (Phaser.Input.Keyboard.JustDown(leftKey))
     {
+        sound_squeak.play();
         UpdateMovingCurve(-cubeLength.x,cubeLength.y);
         playerData.x += 1;
         player.anims.play('left', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(rightKey))
     {
+        sound_squeak.play();
         UpdateMovingCurve(cubeLength.x,-cubeLength.y);
         playerData.x -= 1;
         player.anims.play('right', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(upKey))
     {
+        sound_squeak.play();
         UpdateMovingCurve(-cubeLength.x,-cubeLength.y);
         playerData.y -= 1;
         player.anims.play('up', true);
     }
     else if (Phaser.Input.Keyboard.JustDown(downKey))
     {
+        sound_squeak.play();
         UpdateMovingCurve(cubeLength.x,cubeLength.y);
         playerData.y += 1;
         player.anims.play('down', true);
@@ -842,7 +1091,7 @@ function setRandPos(){
     else if(randCube == 26){soapx = 386; soapy = 515; soapCubex = 2; soapCubey = 4;}
     else if(randCube == 27){soapx = 472; soapy = 515; soapCubex = 1; soapCubey = 5;}
     else if(randCube == 28){soapx = 558; soapy = 515; soapCubex = 0; soapCubey = 6;}
-    soapx += 10;
+    soapx += 300;
     soapy -= 5;
 }
 
@@ -885,6 +1134,8 @@ function LoseCondition(){
     if(isLoser){
         gameState = 2;
         loseText.alpha = 1;
+        loseAnim.setVisible(true);
+        loseAnim.play('gameover');
         player.stopFollow();
         redBall.stopFollow();
     }
@@ -908,6 +1159,7 @@ function NextLevel(scene){
         for(var i=0; i<explosionsChildren.length; i++)
             if(explosionsChildren[i].active)
                 explosionsChildren[i].disable();
+        superBubble.disable();
     }
 }
 
@@ -918,6 +1170,7 @@ function CheckRedballCollision(){
             var distance = children[i].getCenter().distance(redBall.getCenter());
             if(distance < 30){
                 ResetBall();
+                RBExplosion.create(redBall.x,redBall.y,RBexplosionRemoveTime);
                 children[i].disable();
                 break;
             }
